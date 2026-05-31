@@ -25,11 +25,10 @@ class ScraperWorker(QThread):
     finished = pyqtSignal(list)
     error = pyqtSignal(str)
     
-    def __init__(self, keywords: str, max_results: int, api_key: str, cse_id: str):
+    def __init__(self, keywords: str, max_results: int, cse_id: str):
         super().__init__()
         self.keywords = keywords
         self.max_results = max_results
-        self.api_key = api_key
         self.cse_id = cse_id
         self.results = []
     
@@ -37,12 +36,11 @@ class ScraperWorker(QThread):
         try:
             self.progress.emit("شروع جستجو...")
             
-            search_engine = GoogleSearchEngine(self.api_key)
-            search_engine.cse_id = self.cse_id
+            search_engine = GoogleSearchEngine(self.cse_id)
             search_results = search_engine.search(self.keywords, self.max_results)
             
             if not search_results:
-                self.error.emit("نتایج جستجو یافت نشد. لطفا API Key و CSE ID را بررسی کنید.")
+                self.error.emit("نتایج جستجو یافت نشد. لطفا CSE ID را بررسی کنید.")
                 return
             
             scraper = WebScraper()
@@ -254,31 +252,23 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout()
         
-        # API Settings
-        api_group = QGroupBox("تنظیمات Google Custom Search Engine")
-        api_layout = QVBoxLayout()
+        # CSE Settings
+        cse_group = QGroupBox("تنظیمات Google Custom Search Engine")
+        cse_layout = QVBoxLayout()
         
         cse_label = QLabel("شناسه Custom Search Engine (CSE ID):")
+        cse_info = QLabel("می‌توانید CSE ID خود را از https://cse.google.com/cse دریافت کنید")
+        cse_info.setStyleSheet("color: #7f8c8d; font-size: 10pt;")
         self.cse_id_input = QLineEdit()
         self.cse_id_input.setText(config.GOOGLE_CSE_ID)
         self.cse_id_input.setMinimumHeight(35)
-        api_layout.addWidget(cse_label)
-        api_layout.addWidget(self.cse_id_input)
+        self.cse_id_input.setPlaceholderText("مثال: 51fde782e13b723e3")
+        cse_layout.addWidget(cse_label)
+        cse_layout.addWidget(cse_info)
+        cse_layout.addWidget(self.cse_id_input)
         
-        api_key_label = QLabel("API Key (کلید API):")
-        self.api_key_input = QLineEdit()
-        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.api_key_input.setText(config.GOOGLE_CSE_API_KEY)
-        self.api_key_input.setMinimumHeight(35)
-        api_layout.addWidget(api_key_label)
-        api_layout.addWidget(self.api_key_input)
-        
-        show_api_key_checkbox = QCheckBox("نمایش API Key")
-        show_api_key_checkbox.stateChanged.connect(self.toggle_api_key_visibility)
-        api_layout.addWidget(show_api_key_checkbox)
-        
-        api_group.setLayout(api_layout)
-        layout.addWidget(api_group)
+        cse_group.setLayout(cse_layout)
+        layout.addWidget(cse_group)
         
         # Scraping Settings
         scrape_group = QGroupBox("تنظیمات جمع آوری داده ها")
@@ -296,22 +286,25 @@ class MainWindow(QMainWindow):
         layout.addWidget(scrape_group)
         
         # Information
-        info_group = QGroupBox("اطلاعات")
+        info_group = QGroupBox("اطلاعات و راهنما")
         info_layout = QVBoxLayout()
         
         info_text = QLabel(
-            "<b>راهنمای استفاده:</b><br>"
-            "1. شناسه Custom Search Engine خود را وارد کنید<br>"
-            "2. API Key Google Custom Search را تنظیم کنید<br>"
-            "3. کلمات کلیدی را در تب جستجو وارد کنید<br>"
+            "<b>🚀 راهنمای استفاده:</b><br>"
+            "1. شناسه Custom Search Engine (CSE ID) خود را از <a href='https://cse.google.com/cse'>اینجا</a> دریافت کنید<br>"
+            "2. CSE ID را در قسمت تنظیمات وارد کنید<br>"
+            "3. کلمات کلیدی خود را در تب جستجو وارد کنید<br>"
             "4. بر روی 'شروع جستجو' کلیک کنید<br>"
-            "5. نتایج را مشاهده و صادر کنید<br><br>"
-            "<b>نکات مهم:</b><br>"
-            "• حد زمانی پیش فرض 10 ثانیه است<br>"
-            "• برای دریافت API Key به <a href='https://console.cloud.google.com'>Google Cloud Console</a> مراجعه کنید<br>"
-            "• نتایج صادر شده در پوشه 'data/results' ذخیره می‌شوند"
+            "5. نتایج را مشاهده و در قالب‌های مختلف صادر کنید<br><br>"
+            "<b>📌 نکات مهم:</b><br>"
+            "• حد زمانی پیش‌فرض 10 ثانیه است (برای وبسایت‌های کند می‌توانید افزایش دهید)<br>"
+            "• اپلیکیشن نتایج را مستقیماً از صفحه گوگل CSE استخراج می‌کند<br>"
+            "• نتایج شامل ایمیل و شماره تماسی است که در وبسایت‌ها پیدا شود<br>"
+            "• نتایج صادرشده در پوشه 'data/results' ذخیره می‌شوند<br>"
+            "• می‌توانید نتایج را به فرمت‌های Excel، CSV و JSON صادر کنید"
         )
         info_text.setOpenExternalLinks(True)
+        info_text.setWordWrap(True)
         info_layout.addWidget(info_text)
         
         info_group.setLayout(info_layout)
@@ -328,13 +321,6 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
         return widget
     
-    def toggle_api_key_visibility(self, state):
-        """نمایش یا پنهان کردن API Key"""
-        if state:
-            self.api_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
-        else:
-            self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-    
     def start_search(self):
         """شروع جستجو"""
         keywords = self.keywords_input.text().strip()
@@ -343,12 +329,7 @@ class MainWindow(QMainWindow):
             show_warning(self, "هشدار", "لطفاً کلمات کلیدی را وارد کنید")
             return
         
-        api_key = self.api_key_input.text().strip()
         cse_id = self.cse_id_input.text().strip()
-        
-        if not api_key:
-            show_warning(self, "هشدار", "لطفاً API Key را وارد کنید")
-            return
         
         if not cse_id:
             show_warning(self, "هشدار", "لطفاً Custom Search Engine ID را وارد کنید")
@@ -361,7 +342,7 @@ class MainWindow(QMainWindow):
         self.statusbar.showMessage("جستجو در حال انجام...")
         
         max_results = self.max_results_spinbox.value()
-        self.worker = ScraperWorker(keywords, max_results, api_key, cse_id)
+        self.worker = ScraperWorker(keywords, max_results, cse_id)
         self.worker.progress.connect(self.update_progress)
         self.worker.finished.connect(self.on_search_finished)
         self.worker.error.connect(self.on_search_error)
@@ -504,7 +485,6 @@ class MainWindow(QMainWindow):
     def save_settings(self):
         """ذخیره تنظیمات"""
         config.GOOGLE_CSE_ID = self.cse_id_input.text()
-        config.GOOGLE_CSE_API_KEY = self.api_key_input.text()
         config.REQUEST_TIMEOUT = self.settings_timeout_spinbox.value()
         
         show_info(self, "موفقیت", "تنظیمات با موفقیت ذخیره شدند")
